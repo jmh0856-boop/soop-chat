@@ -310,9 +310,10 @@ class MainWindow(QMainWindow):
         else:
             chats = main_viewmodel.get_all_chats(streamer_id)
 
+        display_chats = chats[-1000:] if not nick else chats
         new_items = [
             f"[{c['time']}] {c['nickname']}({c['user_id']}): {c['message']}"
-            for c in chats[-100:]
+            for c in display_chats
         ]
         current_items = [
             self.chat_list.item(i).text() for i in range(self.chat_list.count())
