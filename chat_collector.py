@@ -58,7 +58,10 @@ def decode_message(data, streamer_id):
         if not messages:
             return
         header = messages[0]
-        if "0005" not in header:
+        # 0005 채팅만 처리, 0127 입장/퇴장 무시
+        if "0005" not in header and "00050" not in header:
+            return
+        if "0127" in header or "12700" in header:
             return
         if len(messages) < 7:
             return
