@@ -1,7 +1,7 @@
 import sys
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QPalette
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -12,13 +12,14 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from chat_collector import active_streamers, add_streamer, remove_streamer, start
-from storage import storage
+from storage import favorites, storage
 
 
 class MainWindow(QMainWindow):
@@ -29,16 +30,14 @@ class MainWindow(QMainWindow):
         self.is_dark = True
         self.init_ui()
         self.apply_theme()
+        self.load_favorites()
 
-        # 채팅 수집기 시작
         start()
 
-        # 3초마다 방송 목록 갱신
         self.timer = QTimer()
         self.timer.timeout.connect(self.load_streamers)
         self.timer.start(3000)
 
-        # 1초마다 채팅 자동 업데이트
         self.chat_timer = QTimer()
         self.chat_timer.timeout.connect(self.auto_update_chat)
         self.chat_timer.start(1000)
@@ -50,7 +49,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
         layout.setContentsMargins(20, 20, 20, 20)
 
-        # 상단 헤더
+        # 헤더
         header = QHBoxLayout()
         title = QLabel("숲TV 채팅 검색기")
         title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
@@ -80,17 +79,30 @@ class MainWindow(QMainWindow):
         self.remove_btn = QPushButton("제거")
         self.remove_btn.setFixedSize(60, 36)
         self.remove_btn.clicked.connect(self.remove_streamer)
-
+        self.fav_btn = QPushButton("★")
+        self.fav_btn.setFixedSize(36, 36)
+        self.fav_btn.clicked.connect(self.toggle_favorite)
         input_row.addWidget(self.streamer_input)
         input_row.addWidget(self.add_btn)
         input_row.addWidget(self.remove_btn)
+        input_row.addWidget(self.fav_btn)
 
         self.streamer_list_label = QLabel("수집 중인 방송: 없음")
         self.streamer_list_label.setFont(QFont("Arial", 9))
 
+        fav_label = QLabel("즐겨찾기 (더블클릭으로 추가)")
+        fav_label.setFont(QFont("Arial", 9))
+        self.fav_list = QListWidget()
+        self.fav_list.setFixedHeight(70)
+        self.fav_list.itemDoubleClicked.connect(self.add_from_favorite)
+        self.fav_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.fav_list.customContextMenuRequested.connect(self.fav_context_menu)
+
         add_layout.addWidget(add_label)
         add_layout.addLayout(input_row)
         add_layout.addWidget(self.streamer_list_label)
+        add_layout.addWidget(fav_label)
+        add_layout.addWidget(self.fav_list)
         layout.addWidget(add_frame)
 
         # 채팅 검색 섹션
@@ -126,10 +138,18 @@ class MainWindow(QMainWindow):
         layout.addWidget(search_frame)
 
     def extract_id(self, text):
-        # URL에서 ID 추출
         text = text.strip()
-        if "sooplive.co.kr/" in text:
-            return text.split("sooplive.co.kr/")[-1].split("/")[0]
+        if "sooplive" in text or "afreecatv" in text:
+            parts = text.rstrip("/").split("/")
+            # URL에서 스트리머 ID 추출 (숫자가 아닌 마지막 부분)
+            for part in reversed(parts):
+                if (
+                    part
+                    and not part.isdigit()
+                    and "sooplive" not in part
+                    and "http" not in part
+                ):
+                    return part
         return text
 
     def add_streamer(self):
@@ -169,6 +189,54 @@ class MainWindow(QMainWindow):
         if current in streamers:
             self.streamer_combo.setCurrentText(current)
 
+    def toggle_favorite(self):
+        raw = self.streamer_input.text().strip()
+        if not raw:
+            return
+        streamer_id = self.extract_id(raw)
+        if streamer_id in favorites.favorites:
+            favorites.remove(streamer_id)
+        else:
+            # 닉네임 가져오기 시도
+            import asyncio
+
+            async def get_nick():
+                from chat_collector import get_bj_info
+
+                info = await get_bj_info(streamer_id)
+                return info.get("bjnick", "") if info else ""
+
+            try:
+                loop = asyncio.new_event_loop()
+                nickname = loop.run_until_complete(get_nick())
+                loop.close()
+            except:
+                nickname = ""
+            favorites.add(streamer_id, nickname)
+        self.load_favorites()
+
+    def load_favorites(self):
+        self.fav_list.clear()
+        for fav in favorites.get_all():
+            self.fav_list.addItem(fav)
+
+    def fav_context_menu(self, pos):
+        item = self.fav_list.itemAt(pos)
+        if not item:
+            return
+        menu = QMenu(self)
+        delete_action = menu.addAction("삭제")
+        action = menu.exec(self.fav_list.mapToGlobal(pos))
+        if action == delete_action:
+            favorites.remove(item.text())
+            self.load_favorites()
+
+    def add_from_favorite(self, item):
+        streamer_id = favorites.get_id(item.text())
+        message = add_streamer(streamer_id)
+        self.load_streamers()
+        self.chat_list.addItem(message)
+
     def search_chat(self):
         streamer_id = self.streamer_combo.currentText()
         nick = self.nick_input.text().strip()
@@ -180,7 +248,6 @@ class MainWindow(QMainWindow):
             self.chat_list.clear()
             self.chat_list.addItem("닉네임을 입력해주세요")
             return
-
         chats = storage.search_by_nickname(streamer_id, nick)
         self.chat_list.clear()
         if not chats:
@@ -201,7 +268,7 @@ class MainWindow(QMainWindow):
         else:
             chats = storage.get_all_chats(streamer_id)
         self.chat_list.clear()
-        for c in chats[-100:]:  # 최근 100개만
+        for c in chats[-100:]:
             self.chat_list.addItem(
                 f"[{c['time']}] {c['nickname']}({c['user_id']}): {c['message']}"
             )
@@ -226,6 +293,7 @@ class MainWindow(QMainWindow):
             self.add_btn.setStyleSheet("background: #4a9eff; color: white;")
             self.remove_btn.setStyleSheet("background: #ff4a4a; color: white;")
             self.search_btn.setStyleSheet("background: #4aff88; color: #0e0e0e;")
+            self.fav_btn.setStyleSheet("background: #f0a500; color: white;")
             self.theme_btn.setStyleSheet(
                 "background: #ffffff; color: #1a1a1a; border: 1px solid #444; border-radius: 6px;"
             )
@@ -242,6 +310,7 @@ class MainWindow(QMainWindow):
             self.add_btn.setStyleSheet("background: #1a7fe8; color: white;")
             self.remove_btn.setStyleSheet("background: #ff4a4a; color: white;")
             self.search_btn.setStyleSheet("background: #2ecc71; color: white;")
+            self.fav_btn.setStyleSheet("background: #e09400; color: white;")
             self.theme_btn.setStyleSheet(
                 "background: #1a1a1a; color: #ffffff; border: 1px solid #ddd; border-radius: 6px;"
             )

@@ -1,3 +1,4 @@
+import json
 import time
 from collections import defaultdict
 
@@ -49,3 +50,54 @@ class ChatStorage:
 
 # 앱 전체에서 하나만 사용
 storage = ChatStorage()
+
+
+class FavoriteStorage:
+    def __init__(self):
+        self.favorites = {}
+        self._load()
+
+    def _load(self):
+        try:
+            with open("favorites.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    self.favorites = {k: k for k in data}
+                else:
+                    self.favorites = data
+        except:
+            self.favorites = {}
+
+    def _save(self):
+        with open("favorites.json", "w", encoding="utf-8") as f:
+            json.dump(self.favorites, f, ensure_ascii=False)
+
+    def add(self, streamer_id, nickname=""):
+        display = f"{nickname}({streamer_id})" if nickname else streamer_id
+        self.favorites[streamer_id] = display
+        self._save()
+
+    def remove(self, display_or_id):
+        # ID로 직접 삭제 시도
+        if display_or_id in self.favorites:
+            del self.favorites[display_or_id]
+            self._save()
+            return
+        # 표시명으로 삭제 시도
+        for k, v in list(self.favorites.items()):
+            if v == display_or_id:
+                del self.favorites[k]
+                self._save()
+                return
+
+    def get_all(self):
+        return list(self.favorites.values())
+
+    def get_id(self, display):
+        for k, v in self.favorites.items():
+            if v == display:
+                return k
+        return display
+
+
+favorites = FavoriteStorage()

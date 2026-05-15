@@ -44,9 +44,10 @@ async def get_bj_info(streamer_id: str):
         return {
             "bno": channel.get("BNO"),
             "chat_ip": channel.get("CHDOMAIN").lower(),
-            "chat_port": str(int(channel.get("CHPT")) + 1),  # +1 추가!
+            "chat_port": str(int(channel.get("CHPT")) + 1),
             "ft": channel.get("FTK"),
             "bjid": channel.get("BJID"),
+            "bjnick": channel.get("BJNICK", ""),  # 추가
             "chatno": channel.get("CHATNO"),
         }
 
