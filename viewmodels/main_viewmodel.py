@@ -57,5 +57,16 @@ class MainViewModel:
     def stop_streamer(self, streamer_id: str) -> str:
         return chat_service.stop_streamer(streamer_id)
 
+    def is_live(self, streamer_id: str) -> bool:
+        import asyncio
+
+        try:
+            loop = asyncio.new_event_loop()
+            result = loop.run_until_complete(chat_service.check_live(streamer_id))
+            loop.close()
+            return result
+        except:
+            return False
+
 
 main_viewmodel = MainViewModel()

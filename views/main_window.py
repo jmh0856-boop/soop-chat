@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QPushButton,
     QSplitter,
     QTabWidget,
@@ -165,13 +166,28 @@ class MainWindow(QMainWindow):
         raw = self.streamer_input.text().strip()
         if not raw:
             return
-        message = main_viewmodel.add_streamer(raw)
         streamer_id = main_viewmodel.extract_id(raw)
+        if not main_viewmodel.is_live(streamer_id):
+            QMessageBox.warning(self, "알림", f"{streamer_id} 방송 중이 아닙니다!")
+            self.streamer_input.clear()
+            return
+        message = main_viewmodel.add_streamer(raw)
         if streamer_id not in self.tab_streamers:
             self.tab_streamers.append(streamer_id)
         self.streamer_input.clear()
         self.load_streamers()
         self.chat_list.clear()
+        self.chat_list.addItem(message)
+
+    def add_from_favorite(self, item):
+        streamer_id = main_viewmodel.get_favorite_id(item.text())
+        if not main_viewmodel.is_live(streamer_id):
+            QMessageBox.warning(self, "알림", f"{streamer_id} 방송 중이 아닙니다!")
+            return
+        message = main_viewmodel.add_streamer(streamer_id)
+        if streamer_id not in self.tab_streamers:
+            self.tab_streamers.append(streamer_id)
+        self.load_streamers()
         self.chat_list.addItem(message)
 
     def remove_streamer(self):
@@ -258,14 +274,6 @@ class MainWindow(QMainWindow):
         if action == delete_action:
             main_viewmodel.remove_favorite(item.text())
             self.load_favorites()
-
-    def add_from_favorite(self, item):
-        streamer_id = main_viewmodel.get_favorite_id(item.text())
-        if streamer_id not in self.tab_streamers:
-            self.tab_streamers.append(streamer_id)
-        message = main_viewmodel.add_streamer(streamer_id)
-        self.load_streamers()
-        self.chat_list.addItem(message)
 
     def search_chat(self):
         idx = self.tab_widget.currentIndex()

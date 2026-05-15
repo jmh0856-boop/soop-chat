@@ -104,6 +104,10 @@ class ChatService:
                 "chatno": channel.get("CHATNO"),
             }
 
+    async def check_live(self, streamer_id: str) -> bool:
+        info = await self.get_bj_info(streamer_id)
+        return info is not None
+
     async def _connect_chat(self, streamer_id: str):
         print(f"{streamer_id} 방송 정보 가져오는 중...")
         info = await self.get_bj_info(streamer_id)
