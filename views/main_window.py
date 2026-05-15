@@ -70,13 +70,14 @@ class MainWindow(QMainWindow):
         header.addWidget(self.theme_btn)
         layout.addLayout(header)
 
-        # 방송 추가 섹션
+        # 방송 추가 박스
         add_frame = QFrame()
         add_frame.setFrameShape(QFrame.Shape.StyledPanel)
         add_layout = QVBoxLayout(add_frame)
+        add_layout.setContentsMargins(8, 8, 8, 8)
 
         add_label = QLabel("방송 추가")
-        add_label.setFont(QFont("Arial", 10))
+        add_label.setFont(QFont("Arial", 15))
 
         input_row = QHBoxLayout()
         self.streamer_input = QLineEdit()
@@ -96,20 +97,26 @@ class MainWindow(QMainWindow):
         input_row.addWidget(self.remove_btn)
         input_row.addWidget(self.fav_btn)
 
-        fav_label = QLabel("즐겨찾기 (더블클릭으로 추가)")
-        fav_label.setFont(QFont("Arial", 9))
+        add_layout.addWidget(add_label)
+        add_layout.addLayout(input_row)
+
+        # 즐겨찾기 박스
+        fav_frame = QFrame()
+        fav_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        fav_layout = QVBoxLayout(fav_frame)
+        fav_layout.setContentsMargins(8, 8, 8, 8)
+
+        fav_label = QLabel("즐겨 찾기")
+        fav_label.setFont(QFont("Arial", 15))
         self.fav_list = QListWidget()
-        self.fav_list.setFixedHeight(70)
         self.fav_list.itemDoubleClicked.connect(self.add_from_favorite)
         self.fav_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.fav_list.customContextMenuRequested.connect(self.fav_context_menu)
 
-        add_layout.addWidget(add_label)
-        add_layout.addLayout(input_row)
-        add_layout.addWidget(fav_label)
-        add_layout.addWidget(self.fav_list)
+        fav_layout.addWidget(fav_label)
+        fav_layout.addWidget(self.fav_list)
 
-        # 채팅 검색 섹션
+        # 채팅 검색 박스
         search_frame = QFrame()
         search_frame.setFrameShape(QFrame.Shape.StyledPanel)
         search_layout = QVBoxLayout(search_frame)
@@ -118,7 +125,7 @@ class MainWindow(QMainWindow):
 
         self.tab_widget = QTabWidget()
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
-        self.tab_widget.setFixedHeight(36)
+        self.tab_widget.setMaximumHeight(36)
 
         search_row = QHBoxLayout()
         self.nick_input = QLineEdit()
@@ -138,11 +145,14 @@ class MainWindow(QMainWindow):
         search_layout.addLayout(search_row)
         search_layout.addWidget(self.chat_list)
 
+        # Splitter
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.addWidget(add_frame)
+        splitter.addWidget(fav_frame)
         splitter.addWidget(search_frame)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setStretchFactor(2, 3)
         splitter.setHandleWidth(6)
         layout.addWidget(splitter)
 
@@ -231,7 +241,7 @@ class MainWindow(QMainWindow):
         for c in chats:
             item = QListWidgetItem(f"[{c['time']}] {c['nickname']}: {c['message']}")
             self.chat_list.addItem(item)
-        self.chat_list.scrollToBottom()
+        # self.chat_list.scrollToBottom() 스크롤 항상 아래
 
     def on_chat_clicked(self, item):
         text = item.text()
@@ -257,7 +267,7 @@ class MainWindow(QMainWindow):
             self.chat_list.addItem(
                 f"[{c['time']}] {c['nickname']}({c['user_id']}): {c['message']}"
             )
-        self.chat_list.scrollToBottom()
+        # self.chat_list.scrollToBottom() 스크롤 항상 아래
 
     def toggle_theme(self):
         self.is_dark = not self.is_dark
