@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(700, 600)
         self.is_dark = True
         self.init_ui()
+        self.chat_list.itemClicked.connect(self.on_chat_clicked)
         self.apply_theme()
         self.load_favorites()
 
@@ -231,6 +232,15 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(f"[{c['time']}] {c['nickname']}: {c['message']}")
             self.chat_list.addItem(item)
         self.chat_list.scrollToBottom()
+
+    def on_chat_clicked(self, item):
+        text = item.text()
+        try:
+            nickname = text.split("] ")[1].split("(")[0]
+            self.nick_input.setText(nickname)
+            self.search_chat()
+        except Exception:
+            pass
 
     def auto_update_chat(self):
         idx = self.tab_widget.currentIndex()
