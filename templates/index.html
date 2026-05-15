@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>숲TV 채팅 검색기</title>
+    <style>
+        :root[data-theme="dark"] {
+            --bg: #0e0e0e;
+            --bg2: #1a1a1a;
+            --bg3: #2a2a2a;
+            --text: #e0e0e0;
+            --text2: #888;
+            --border: #444;
+            --blue: #4a9eff;
+        }
+        :root[data-theme="light"] {
+            --bg: #f5f5f5;
+            --bg2: #ffffff;
+            --bg3: #eeeeee;
+            --text: #1a1a1a;
+            --text2: #666;
+            --border: #ddd;
+            --blue: #1a7fe8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: var(--bg); color: var(--text); font-family: Arial, sans-serif; padding: 20px; transition: background 0.3s, color 0.3s; }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        h1 { color: var(--blue); }
+        .theme-btn { padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--bg2); color: var(--text); cursor: pointer; font-size: 13px; }
+        .section { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .section h2 { font-size: 14px; color: var(--text2); margin-bottom: 12px; }
+        input { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; width: 240px; font-size: 14px; }
+        button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin-left: 8px; }
+        .btn-add { background: var(--blue); color: white; }
+        .btn-remove { background: #ff4a4a; color: white; }
+        .btn-search { background: #4aff88; color: #0e0e0e; }
+        .streamer-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .streamer-tag { background: var(--bg3); border: 1px solid var(--blue); border-radius: 20px; padding: 4px 12px; font-size: 13px; color: var(--blue); }
+        .chat-box { height: 420px; overflow-y: auto; margin-top: 12px; }
+        .chat-item { padding: 6px 0; border-bottom: 1px solid var(--bg3); font-size: 14px; }
+        .nick { color: var(--blue); font-weight: bold; margin-right: 6px; }
+        .time { color: var(--text2); font-size: 12px; margin-left: 8px; }
+        .empty { color: var(--text2); text-align: center; padding: 40px; }
+        select { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>숲TV 채팅 검색기</h1>
+        <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">🌙 다크모드</button>
+    </div>
+
+    <div class="section">
+        <h2>방송 추가</h2>
+        <input id="streamerId" placeholder="스트리머 ID 입력">
+        <button class="btn-add" onclick="addStreamer()">추가</button>
+        <button class="btn-remove" onclick="removeStreamer()">제거</button>
+        <div class="streamer-list" id="streamerList"></div>
+    </div>
+
+    <div class="section">
+        <h2>채팅 검색</h2>
+        <select id="selectedStreamer">
+            <option value="">방송 선택</option>
+        </select>
+        <input id="nickSearch" placeholder="닉네임 검색" style="margin-left:8px">
+        <button class="btn-search" onclick="searchChat()">검색</button>
+        <div class="chat-box" id="chatBox">
+            <div class="empty">방송을 추가하고 닉네임을 검색해주세요</div>
+        </div>
+    </div>
+
+    <script>
+        // 테마 토글
+        function toggleTheme() {
+            const html = document.documentElement;
+            const btn = document.getElementById('themeBtn');
+            if (html.dataset.theme === 'dark') {
+                html.dataset.theme = 'light';
+                btn.textContent = '🌙 다크모드';
+            } else {
+                html.dataset.theme = 'dark';
+                btn.textContent = '☀️ 라이트모드';
+            }
+        }
+
+        function addStreamer() {
+            const id = document.getElementById('streamerId').value.trim();
+            if (!id) { alert('스트리머 ID를 입력해주세요'); return; }
+            fetch('/add_streamer', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({streamer_id: id})
+            })
+            .then(r => r.json())
+            .then(data => {
+                alert(data.message);
+                document.getElementById('streamerId').value = '';
+                loadStreamers();
+            });
+        }
+
+        function removeStreamer() {
+            const id = document.getElementById('streamerId').value.trim();
+            if (!id) { alert('제거할 스트리머 ID를 입력해주세요'); return; }
+            fetch('/remove_streamer', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({streamer_id: id})
+            })
+            .then(r => r.json())
+            .then(data => {
+                alert(data.message);
+                document.getElementById('streamerId').value = '';
+                loadStreamers();
+            });
+        }
+
+        function loadStreamers() {
+            fetch('/streamers')
+            .then(r => r.json())
+            .then(data => {
+                const list = document.getElementById('streamerList');
+                const select = document.getElementById('selectedStreamer');
+                list.innerHTML = data.streamers.map(s =>
+                    `<span class="streamer-tag">${s}</span>`
+                ).join('');
+                select.innerHTML = '<option value="">방송 선택</option>' +
+                    data.streamers.map(s =>
+                        `<option value="${s}">${s}</option>`
+                    ).join('');
+            });
+        }
+
+        function searchChat() {
+            const streamerId = document.getElementById('selectedStreamer').value;
+            const nick = document.getElementById('nickSearch').value.trim();
+            if (!streamerId) { alert('방송을 선택해주세요'); return; }
+            if (!nick) { alert('닉네임을 입력해주세요'); return; }
+            fetch(`/search?streamer_id=${streamerId}&nickname=${encodeURIComponent(nick)}`)
+            .then(r => r.json())
+            .then(data => {
+                const box = document.getElementById('chatBox');
+                if (data.chats.length === 0) {
+                    box.innerHTML = '<div class="empty">채팅 내역이 없습니다</div>';
+                    return;
+                }
+                box.innerHTML = data.chats.map(c =>
+                    `<div class="chat-item">
+                        <span class="nick">${c.nickname}</span>
+                        ${c.message}
+                        <span class="time">${c.time}</span>
+                    </div>`
+                ).join('');
+                box.scrollTop = box.scrollHeight;
+            });
+        }
+
+        setInterval(loadStreamers, 3000);
+        loadStreamers();
+    </script>
+</body>
+</html>
