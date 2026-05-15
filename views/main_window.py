@@ -95,10 +95,6 @@ class MainWindow(QMainWindow):
         input_row.addWidget(self.remove_btn)
         input_row.addWidget(self.fav_btn)
 
-        self.streamer_list_label = QLabel("수집 중인 방송: 없음")
-        self.streamer_list_label.setFont(QFont("Arial", 9))
-        self.streamer_tags = QHBoxLayout()
-
         fav_label = QLabel("즐겨찾기 (더블클릭으로 추가)")
         fav_label.setFont(QFont("Arial", 9))
         self.fav_list = QListWidget()
@@ -109,8 +105,6 @@ class MainWindow(QMainWindow):
 
         add_layout.addWidget(add_label)
         add_layout.addLayout(input_row)
-        add_layout.addWidget(self.streamer_list_label)
-        add_layout.addLayout(self.streamer_tags)
         add_layout.addWidget(fav_label)
         add_layout.addWidget(self.fav_list)
         layout.addWidget(add_frame)
@@ -168,24 +162,6 @@ class MainWindow(QMainWindow):
 
     def load_streamers(self):
         streamers = main_viewmodel.get_active_streamers()
-
-        while self.streamer_tags.count():
-            item = self.streamer_tags.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        if streamers:
-            self.streamer_list_label.setText("수집 중인 방송:")
-            for s in streamers:
-                btn = QPushButton(s)
-                btn.setFixedHeight(24)
-                btn.clicked.connect(
-                    lambda checked, sid=s: self.streamer_input.setText(sid)
-                )
-                self.streamer_tags.addWidget(btn)
-            self.streamer_tags.addStretch()
-        else:
-            self.streamer_list_label.setText("수집 중인 방송: 없음")
 
         current_tab = self.tab_widget.currentIndex()
         self.tab_widget.blockSignals(True)
@@ -294,12 +270,7 @@ class MainWindow(QMainWindow):
             self.theme_btn.setStyleSheet(
                 "background: #ffffff; color: #1a1a1a; border: 1px solid #444; border-radius: 6px;"
             )
-            for i in range(self.streamer_tags.count()):
-                w = self.streamer_tags.itemAt(i).widget()
-                if w:
-                    w.setStyleSheet(
-                        "background: #2a2a2a; color: #4a9eff; border: 1px solid #4a9eff; border-radius: 12px; padding: 2px 8px;"
-                    )
+
         else:
             self.setStyleSheet(
                 """
@@ -320,9 +291,3 @@ class MainWindow(QMainWindow):
             self.theme_btn.setStyleSheet(
                 "background: #1a1a1a; color: #ffffff; border: 1px solid #ddd; border-radius: 6px;"
             )
-            for i in range(self.streamer_tags.count()):
-                w = self.streamer_tags.itemAt(i).widget()
-                if w:
-                    w.setStyleSheet(
-                        "background: #eeeeee; color: #1a7fe8; border: 1px solid #1a7fe8; border-radius: 12px; padding: 2px 8px;"
-                    )
