@@ -89,6 +89,8 @@ class MainWindow(QMainWindow):
 
         self.streamer_list_label = QLabel("수집 중인 방송: 없음")
         self.streamer_list_label.setFont(QFont("Arial", 9))
+        self.streamer_tags = QHBoxLayout()
+        add_layout.addLayout(self.streamer_tags)
 
         fav_label = QLabel("즐겨찾기 (더블클릭으로 추가)")
         fav_label.setFont(QFont("Arial", 9))
@@ -176,8 +178,23 @@ class MainWindow(QMainWindow):
 
     def load_streamers(self):
         streamers = list(active_streamers)
+
+        # 태그 버튼 갱신
+        while self.streamer_tags.count():
+            item = self.streamer_tags.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
         if streamers:
-            self.streamer_list_label.setText(f'수집 중인 방송: {", ".join(streamers)}')
+            self.streamer_list_label.setText("수집 중인 방송:")
+            for s in streamers:
+                btn = QPushButton(s)
+                btn.setFixedHeight(24)
+                btn.clicked.connect(
+                    lambda checked, sid=s: self.streamer_input.setText(sid)
+                )
+                self.streamer_tags.addWidget(btn)
+            self.streamer_tags.addStretch()
         else:
             self.streamer_list_label.setText("수집 중인 방송: 없음")
 
@@ -297,6 +314,12 @@ class MainWindow(QMainWindow):
             self.theme_btn.setStyleSheet(
                 "background: #ffffff; color: #1a1a1a; border: 1px solid #444; border-radius: 6px;"
             )
+            for i in range(self.streamer_tags.count()):
+                w = self.streamer_tags.itemAt(i).widget()
+                if w:
+                    w.setStyleSheet(
+                        "background: #2a2a2a; color: #4a9eff; border: 1px solid #4a9eff; border-radius: 12px; padding: 2px 8px;"
+                    )
         else:
             self.setStyleSheet(
                 """
@@ -314,6 +337,12 @@ class MainWindow(QMainWindow):
             self.theme_btn.setStyleSheet(
                 "background: #1a1a1a; color: #ffffff; border: 1px solid #ddd; border-radius: 6px;"
             )
+            for i in range(self.streamer_tags.count()):
+                w = self.streamer_tags.itemAt(i).widget()
+                if w:
+                    w.setStyleSheet(
+                        "background: #eeeeee; color: #1a7fe8; border: 1px solid #1a7fe8; border-radius: 12px; padding: 2px 8px;"
+                    )
 
 
 if __name__ == "__main__":
