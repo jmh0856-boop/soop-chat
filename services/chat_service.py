@@ -50,6 +50,12 @@ class ChatService:
             return f"{streamer_id} 수집 중단"
         return f"{streamer_id} 는 수집 중이 아닙니다"
 
+    def stop_streamer(self, streamer_id: str) -> str:
+        if streamer_id in self.active_streamers:
+            self.active_streamers.discard(streamer_id)
+            return f"{streamer_id} 수집 중단"
+        return f"{streamer_id} 는 수집 중이 아닙니다"
+
     def _extract_id(self, text: str) -> str:
         text = text.strip()
         if "sooplive" in text or "afreecatv" in text:
@@ -97,6 +103,10 @@ class ChatService:
                 "bjnick": channel.get("BJNICK", ""),
                 "chatno": channel.get("CHATNO"),
             }
+
+    async def check_live(self, streamer_id: str) -> bool:
+        info = await self.get_bj_info(streamer_id)
+        return info is not None
 
     async def _connect_chat(self, streamer_id: str):
         print(f"{streamer_id} 방송 정보 가져오는 중...")

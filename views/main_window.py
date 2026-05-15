@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QPushButton,
     QSplitter,
     QTabWidget,
@@ -34,6 +35,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("숲TV 채팅 검색기")
         self.setMinimumSize(700, 600)
         self.is_dark = True
+        self.scroll_locked = True
+        self.tab_streamers = []
         self.init_ui()
         self.chat_list.itemClicked.connect(self.on_chat_clicked)
         self.apply_theme()
@@ -46,10 +49,6 @@ class MainWindow(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.load_streamers)
         self.timer.start(3000)
-
-        self.chat_timer = QTimer()
-        self.chat_timer.timeout.connect(self.auto_update_chat)
-        self.chat_timer.start(1000)
 
     def init_ui(self):
         central = QWidget()
@@ -126,6 +125,8 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
         self.tab_widget.setMaximumHeight(36)
+        self.tab_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tab_widget.customContextMenuRequested.connect(self.tab_context_menu)
 
         search_row = QHBoxLayout()
         self.nick_input = QLineEdit()
@@ -135,8 +136,14 @@ class MainWindow(QMainWindow):
         self.search_btn = QPushButton("검색")
         self.search_btn.setFixedSize(60, 36)
         self.search_btn.clicked.connect(self.search_chat)
+        self.scroll_lock_btn = QPushButton("🔒")
+        self.scroll_lock_btn.setFixedSize(36, 36)
+        self.scroll_lock_btn.setCheckable(True)
+        self.scroll_lock_btn.setChecked(True)
+        self.scroll_lock_btn.clicked.connect(self.toggle_scroll_lock)
         search_row.addWidget(self.nick_input)
         search_row.addWidget(self.search_btn)
+        search_row.addWidget(self.scroll_lock_btn)
 
         self.chat_list = QListWidget()
         self.chat_list.setFont(QFont("Arial", 10))
@@ -145,7 +152,6 @@ class MainWindow(QMainWindow):
         search_layout.addLayout(search_row)
         search_layout.addWidget(self.chat_list)
 
-        # Splitter
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.addWidget(add_frame)
         splitter.addWidget(fav_frame)
@@ -160,36 +166,90 @@ class MainWindow(QMainWindow):
         raw = self.streamer_input.text().strip()
         if not raw:
             return
+        streamer_id = main_viewmodel.extract_id(raw)
+        if not main_viewmodel.is_live(streamer_id):
+            QMessageBox.warning(self, "알림", f"{streamer_id} 방송 중이 아닙니다!")
+            self.streamer_input.clear()
+            return
         message = main_viewmodel.add_streamer(raw)
+        if streamer_id not in self.tab_streamers:
+            self.tab_streamers.append(streamer_id)
         self.streamer_input.clear()
         self.load_streamers()
         self.chat_list.clear()
+        self.chat_list.addItem(message)
+
+    def add_from_favorite(self, item):
+        streamer_id = main_viewmodel.get_favorite_id(item.text())
+        if not main_viewmodel.is_live(streamer_id):
+            QMessageBox.warning(self, "알림", f"{streamer_id} 방송 중이 아닙니다!")
+            return
+        message = main_viewmodel.add_streamer(streamer_id)
+        if streamer_id not in self.tab_streamers:
+            self.tab_streamers.append(streamer_id)
+        self.load_streamers()
         self.chat_list.addItem(message)
 
     def remove_streamer(self):
         raw = self.streamer_input.text().strip()
         if not raw:
             return
-        message = main_viewmodel.remove_streamer(raw)
+        streamer_id = main_viewmodel.extract_id(raw)
+        if streamer_id in self.tab_streamers:
+            self.tab_streamers.remove(streamer_id)
+        message = main_viewmodel.remove_streamer(streamer_id)
         self.streamer_input.clear()
         self.load_streamers()
         self.chat_list.clear()
         self.chat_list.addItem(message)
 
     def load_streamers(self):
-        streamers = main_viewmodel.get_active_streamers()
-
         current_tab = self.tab_widget.currentIndex()
         self.tab_widget.blockSignals(True)
         self.tab_widget.clear()
-        for s in streamers:
+        for s in self.tab_streamers:
             self.tab_widget.addTab(QWidget(), s)
         self.tab_widget.blockSignals(False)
         if 0 <= current_tab < self.tab_widget.count():
             self.tab_widget.setCurrentIndex(current_tab)
 
     def on_tab_changed(self, index):
-        self.chat_list.clear()
+        self.nick_input.clear()
+        self.auto_update_chat()
+
+    def tab_context_menu(self, pos):
+        idx = self.tab_widget.tabBar().tabAt(pos)
+        if idx < 0:
+            return
+        streamer_id = self.tab_widget.tabText(idx)
+        menu = QMenu(self)
+
+        is_active = streamer_id in main_viewmodel.get_active_streamers()
+        if is_active:
+            toggle_action = menu.addAction("수집 중단")
+        else:
+            toggle_action = menu.addAction("재 시작")
+        remove_action = menu.addAction("제거")
+
+        action = menu.exec(self.tab_widget.mapToGlobal(pos))
+        if action == toggle_action:
+            if is_active:
+                message = main_viewmodel.stop_streamer(streamer_id)
+            else:
+                message = main_viewmodel.add_streamer(streamer_id)
+            self.chat_list.addItem(message)
+        elif action == remove_action:
+            if streamer_id in self.tab_streamers:
+                self.tab_streamers.remove(streamer_id)
+            message = main_viewmodel.remove_streamer(streamer_id)
+            self.load_streamers()
+            self.chat_list.clear()
+            self.chat_list.addItem(message)
+
+    def toggle_scroll_lock(self):
+        self.scroll_locked = self.scroll_lock_btn.isChecked()
+        self.scroll_lock_btn.setText("🔒" if self.scroll_locked else "🔓")
+        self.apply_theme()
 
     def toggle_favorite(self):
         raw = self.streamer_input.text().strip()
@@ -215,12 +275,6 @@ class MainWindow(QMainWindow):
             main_viewmodel.remove_favorite(item.text())
             self.load_favorites()
 
-    def add_from_favorite(self, item):
-        streamer_id = main_viewmodel.get_favorite_id(item.text())
-        message = main_viewmodel.add_streamer(streamer_id)
-        self.load_streamers()
-        self.chat_list.addItem(message)
-
     def search_chat(self):
         idx = self.tab_widget.currentIndex()
         streamer_id = self.tab_widget.tabText(idx) if idx >= 0 else ""
@@ -241,7 +295,6 @@ class MainWindow(QMainWindow):
         for c in chats:
             item = QListWidgetItem(f"[{c['time']}] {c['nickname']}: {c['message']}")
             self.chat_list.addItem(item)
-        # self.chat_list.scrollToBottom() 스크롤 항상 아래
 
     def on_chat_clicked(self, item):
         text = item.text()
@@ -254,7 +307,9 @@ class MainWindow(QMainWindow):
 
     def auto_update_chat(self):
         idx = self.tab_widget.currentIndex()
-        streamer_id = self.tab_widget.tabText(idx) if idx >= 0 else ""
+        if idx < 0:
+            return
+        streamer_id = self.tab_widget.tabText(idx)
         if not streamer_id:
             return
         nick = self.nick_input.text().strip()
@@ -262,12 +317,24 @@ class MainWindow(QMainWindow):
             chats = main_viewmodel.search_by_nickname(streamer_id, nick)
         else:
             chats = main_viewmodel.get_all_chats(streamer_id)
+
+        display_chats = chats[-1000:] if not nick else chats
+        new_items = [
+            f"[{c['time']}] {c['nickname']}({c['user_id']}): {c['message']}"
+            for c in display_chats
+        ]
+        current_items = [
+            self.chat_list.item(i).text() for i in range(self.chat_list.count())
+        ]
+        if new_items == current_items:
+            return
+
         self.chat_list.clear()
-        for c in chats[-100:]:
-            self.chat_list.addItem(
-                f"[{c['time']}] {c['nickname']}({c['user_id']}): {c['message']}"
-            )
-        # self.chat_list.scrollToBottom() 스크롤 항상 아래
+        for item in new_items:
+            self.chat_list.addItem(item)
+
+        if self.scroll_locked:
+            self.chat_list.scrollToBottom()
 
     def toggle_theme(self):
         self.is_dark = not self.is_dark
@@ -296,6 +363,11 @@ class MainWindow(QMainWindow):
             self.theme_btn.setStyleSheet(
                 "background: #ffffff; color: #1a1a1a; border: 1px solid #444; border-radius: 6px;"
             )
+            self.scroll_lock_btn.setStyleSheet(
+                "background: #4a9eff; color: white;"
+                if self.scroll_locked
+                else "background: #444; color: white;"
+            )
         else:
             self.setStyleSheet(
                 """
@@ -316,4 +388,9 @@ class MainWindow(QMainWindow):
             self.fav_btn.setStyleSheet("background: #e09400; color: white;")
             self.theme_btn.setStyleSheet(
                 "background: #1a1a1a; color: #ffffff; border: 1px solid #ddd; border-radius: 6px;"
+            )
+            self.scroll_lock_btn.setStyleSheet(
+                "background: #1a7fe8; color: white;"
+                if self.scroll_locked
+                else "background: #ccc; color: #1a1a1a;"
             )
