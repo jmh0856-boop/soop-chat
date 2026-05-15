@@ -50,6 +50,12 @@ class ChatService:
             return f"{streamer_id} 수집 중단"
         return f"{streamer_id} 는 수집 중이 아닙니다"
 
+    def stop_streamer(self, streamer_id: str) -> str:
+        if streamer_id in self.active_streamers:
+            self.active_streamers.discard(streamer_id)
+            return f"{streamer_id} 수집 중단"
+        return f"{streamer_id} 는 수집 중이 아닙니다"
+
     def _extract_id(self, text: str) -> str:
         text = text.strip()
         if "sooplive" in text or "afreecatv" in text:

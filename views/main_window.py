@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
         self.chat_list.itemClicked.connect(self.on_chat_clicked)
         self.apply_theme()
         self.load_favorites()
+        self.tab_streamers = []
 
         chat_signal.updated.connect(self.auto_update_chat)
         main_viewmodel.on_chat_updated = lambda: chat_signal.updated.emit()
@@ -126,6 +127,8 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
         self.tab_widget.setMaximumHeight(36)
+        self.tab_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tab_widget.customContextMenuRequested.connect(self.tab_context_menu)
 
         search_row = QHBoxLayout()
         self.nick_input = QLineEdit()
@@ -161,6 +164,9 @@ class MainWindow(QMainWindow):
         if not raw:
             return
         message = main_viewmodel.add_streamer(raw)
+        streamer_id = main_viewmodel.extract_id(raw)
+        if streamer_id not in self.tab_streamers:
+            self.tab_streamers.append(streamer_id)
         self.streamer_input.clear()
         self.load_streamers()
         self.chat_list.clear()
@@ -170,19 +176,20 @@ class MainWindow(QMainWindow):
         raw = self.streamer_input.text().strip()
         if not raw:
             return
-        message = main_viewmodel.remove_streamer(raw)
+        streamer_id = main_viewmodel.extract_id(raw)
+        if streamer_id in self.tab_streamers:
+            self.tab_streamers.remove(streamer_id)
+        message = main_viewmodel.remove_streamer(streamer_id)
         self.streamer_input.clear()
         self.load_streamers()
         self.chat_list.clear()
         self.chat_list.addItem(message)
 
     def load_streamers(self):
-        streamers = main_viewmodel.get_active_streamers()
-
         current_tab = self.tab_widget.currentIndex()
         self.tab_widget.blockSignals(True)
         self.tab_widget.clear()
-        for s in streamers:
+        for s in self.tab_streamers:
             self.tab_widget.addTab(QWidget(), s)
         self.tab_widget.blockSignals(False)
         if 0 <= current_tab < self.tab_widget.count():
@@ -190,6 +197,35 @@ class MainWindow(QMainWindow):
 
     def on_tab_changed(self, index):
         self.chat_list.clear()
+
+    def tab_context_menu(self, pos):
+        idx = self.tab_widget.tabBar().tabAt(pos)
+        if idx < 0:
+            return
+        streamer_id = self.tab_widget.tabText(idx)
+        menu = QMenu(self)
+
+        is_active = streamer_id in main_viewmodel.get_active_streamers()
+        if is_active:
+            toggle_action = menu.addAction("수집 중단")
+        else:
+            toggle_action = menu.addAction("재 시작")
+        remove_action = menu.addAction("제거")
+
+        action = menu.exec(self.tab_widget.mapToGlobal(pos))
+        if action == toggle_action:
+            if is_active:
+                message = main_viewmodel.stop_streamer(streamer_id)
+            else:
+                message = main_viewmodel.add_streamer(streamer_id)
+            self.chat_list.addItem(message)
+        elif action == remove_action:
+            if streamer_id in self.tab_streamers:
+                self.tab_streamers.remove(streamer_id)
+            message = main_viewmodel.remove_streamer(streamer_id)
+            self.load_streamers()
+            self.chat_list.clear()
+            self.chat_list.addItem(message)
 
     def toggle_favorite(self):
         raw = self.streamer_input.text().strip()
@@ -217,6 +253,8 @@ class MainWindow(QMainWindow):
 
     def add_from_favorite(self, item):
         streamer_id = main_viewmodel.get_favorite_id(item.text())
+        if streamer_id not in self.tab_streamers:
+            self.tab_streamers.append(streamer_id)
         message = main_viewmodel.add_streamer(streamer_id)
         self.load_streamers()
         self.chat_list.addItem(message)

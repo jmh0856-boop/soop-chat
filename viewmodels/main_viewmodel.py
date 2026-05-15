@@ -53,5 +53,9 @@ class MainViewModel:
     def extract_id(self, text: str) -> str:
         return chat_service._extract_id(text)
 
+    # 탭
+    def stop_streamer(self, streamer_id: str) -> str:
+        return chat_service.stop_streamer(streamer_id)
+
 
 main_viewmodel = MainViewModel()
