@@ -1,36 +1,36 @@
 import json
-import time
 from collections import defaultdict
+from typing import Dict, List, Optional
+
+from models.chat import ChatMessage
 
 
 class ChatStorage:
     def __init__(self):
-        # 방송별로 채팅 저장
-        # 구조: { 스트리머ID: { 닉네임: [ 채팅목록 ] } }
-        self.data = defaultdict(lambda: defaultdict(list))
+        self.data: Dict[str, Dict[str, List[dict]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
 
-    def add_chat(self, streamer_id, nickname, message, user_id=""):
-        chat = {
-            "nickname": nickname,
-            "user_id": user_id,
-            "message": message,
-            "time": time.strftime("%H:%M:%S"),
-        }
-        self.data[streamer_id][nickname].append(chat)
+    def add(self, message: ChatMessage):
+        self.data[message.streamer_id][message.nickname].append(
+            {
+                "nickname": message.nickname,
+                "user_id": message.user_id,
+                "message": message.message,
+                "time": message.timestamp,
+            }
+        )
 
-    def search_by_nickname(self, streamer_id, nickname):
-        # 닉네임으로 채팅 검색 (부분 일치)
+    def search_by_nickname(self, streamer_id: str, nickname: str) -> List[dict]:
         result = []
         streamer_data = self.data.get(streamer_id, {})
         for nick, chats in streamer_data.items():
             if nickname.lower() in nick.lower():
                 result.extend(chats)
-        # 시간순 정렬
         result.sort(key=lambda x: x["time"])
         return result
 
-    def get_all_chats(self, streamer_id):
-        # 특정 방송 전체 채팅
+    def get_all(self, streamer_id: str) -> List[dict]:
         result = []
         streamer_data = self.data.get(streamer_id, {})
         for chats in streamer_data.values():
@@ -38,23 +38,17 @@ class ChatStorage:
         result.sort(key=lambda x: x["time"])
         return result
 
-    def get_streamers(self):
-        # 현재 수집 중인 방송 목록
+    def get_streamers(self) -> List[str]:
         return list(self.data.keys())
 
-    def clear(self, streamer_id):
-        # 특정 방송 채팅 초기화
+    def clear(self, streamer_id: str):
         if streamer_id in self.data:
             del self.data[streamer_id]
 
 
-# 앱 전체에서 하나만 사용
-storage = ChatStorage()
-
-
 class FavoriteStorage:
     def __init__(self):
-        self.favorites = {}
+        self.favorites: Dict[str, str] = {}
         self._load()
 
     def _load(self):
@@ -65,39 +59,38 @@ class FavoriteStorage:
                     self.favorites = {k: k for k in data}
                 else:
                     self.favorites = data
-        except:
+        except Exception:
             self.favorites = {}
 
     def _save(self):
         with open("favorites.json", "w", encoding="utf-8") as f:
             json.dump(self.favorites, f, ensure_ascii=False)
 
-    def add(self, streamer_id, nickname=""):
+    def add(self, streamer_id: str, nickname: str = ""):
         display = f"{nickname}({streamer_id})" if nickname else streamer_id
         self.favorites[streamer_id] = display
         self._save()
 
-    def remove(self, display_or_id):
-        # ID로 직접 삭제 시도
+    def remove(self, display_or_id: str):
         if display_or_id in self.favorites:
             del self.favorites[display_or_id]
             self._save()
             return
-        # 표시명으로 삭제 시도
         for k, v in list(self.favorites.items()):
             if v == display_or_id:
                 del self.favorites[k]
                 self._save()
                 return
 
-    def get_all(self):
+    def get_all(self) -> List[str]:
         return list(self.favorites.values())
 
-    def get_id(self, display):
+    def get_id(self, display: str) -> str:
         for k, v in self.favorites.items():
             if v == display:
                 return k
         return display
 
 
-favorites = FavoriteStorage()
+chat_storage = ChatStorage()
+favorite_storage = FavoriteStorage()

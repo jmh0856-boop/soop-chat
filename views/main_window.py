@@ -1,6 +1,6 @@
 import sys
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication,
@@ -18,8 +18,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from chat_collector import active_streamers, add_streamer, remove_streamer, start
-from storage import favorites, storage
+from viewmodels.main_viewmodel import main_viewmodel
+
+
+class ChatSignal(QObject):
+    updated = pyqtSignal()
+
+
+chat_signal = ChatSignal()
 
 
 class MainWindow(QMainWindow):
@@ -32,7 +38,9 @@ class MainWindow(QMainWindow):
         self.apply_theme()
         self.load_favorites()
 
-        start()
+        chat_signal.updated.connect(self.auto_update_chat)
+        main_viewmodel.on_chat_updated = lambda: chat_signal.updated.emit()
+        main_viewmodel.start()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.load_streamers)
@@ -138,26 +146,11 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(self.chat_list)
         layout.addWidget(search_frame)
 
-    def extract_id(self, text):
-        text = text.strip()
-        if "sooplive" in text or "afreecatv" in text:
-            parts = text.rstrip("/").split("/")
-            for part in reversed(parts):
-                if (
-                    part
-                    and not part.isdigit()
-                    and "sooplive" not in part
-                    and "http" not in part
-                ):
-                    return part
-        return text
-
     def add_streamer(self):
         raw = self.streamer_input.text().strip()
         if not raw:
             return
-        streamer_id = self.extract_id(raw)
-        message = add_streamer(streamer_id)
+        message = main_viewmodel.add_streamer(raw)
         self.streamer_input.clear()
         self.load_streamers()
         self.chat_list.clear()
@@ -167,17 +160,15 @@ class MainWindow(QMainWindow):
         raw = self.streamer_input.text().strip()
         if not raw:
             return
-        streamer_id = self.extract_id(raw)
-        message = remove_streamer(streamer_id)
+        message = main_viewmodel.remove_streamer(raw)
         self.streamer_input.clear()
         self.load_streamers()
         self.chat_list.clear()
         self.chat_list.addItem(message)
 
     def load_streamers(self):
-        streamers = list(active_streamers)
+        streamers = main_viewmodel.get_active_streamers()
 
-        # 태그 버튼 갱신
         while self.streamer_tags.count():
             item = self.streamer_tags.takeAt(0)
             if item.widget():
@@ -196,7 +187,6 @@ class MainWindow(QMainWindow):
         else:
             self.streamer_list_label.setText("수집 중인 방송: 없음")
 
-        # 탭 갱신
         current_tab = self.tab_widget.currentIndex()
         self.tab_widget.blockSignals(True)
         self.tab_widget.clear()
@@ -213,30 +203,13 @@ class MainWindow(QMainWindow):
         raw = self.streamer_input.text().strip()
         if not raw:
             return
-        streamer_id = self.extract_id(raw)
-        if streamer_id in favorites.favorites:
-            favorites.remove(streamer_id)
-        else:
-            import asyncio
-
-            async def get_nick():
-                from chat_collector import get_bj_info
-
-                info = await get_bj_info(streamer_id)
-                return info.get("bjnick", "") if info else ""
-
-            try:
-                loop = asyncio.new_event_loop()
-                nickname = loop.run_until_complete(get_nick())
-                loop.close()
-            except:
-                nickname = ""
-            favorites.add(streamer_id, nickname)
+        streamer_id = main_viewmodel.extract_id(raw)
+        main_viewmodel.toggle_favorite(streamer_id)
         self.load_favorites()
 
     def load_favorites(self):
         self.fav_list.clear()
-        for fav in favorites.get_all():
+        for fav in main_viewmodel.get_favorites():
             self.fav_list.addItem(fav)
 
     def fav_context_menu(self, pos):
@@ -247,12 +220,12 @@ class MainWindow(QMainWindow):
         delete_action = menu.addAction("삭제")
         action = menu.exec(self.fav_list.mapToGlobal(pos))
         if action == delete_action:
-            favorites.remove(item.text())
+            main_viewmodel.remove_favorite(item.text())
             self.load_favorites()
 
     def add_from_favorite(self, item):
-        streamer_id = favorites.get_id(item.text())
-        message = add_streamer(streamer_id)
+        streamer_id = main_viewmodel.get_favorite_id(item.text())
+        message = main_viewmodel.add_streamer(streamer_id)
         self.load_streamers()
         self.chat_list.addItem(message)
 
@@ -268,7 +241,7 @@ class MainWindow(QMainWindow):
             self.chat_list.clear()
             self.chat_list.addItem("닉네임을 입력해주세요")
             return
-        chats = storage.search_by_nickname(streamer_id, nick)
+        chats = main_viewmodel.search_by_nickname(streamer_id, nick)
         self.chat_list.clear()
         if not chats:
             self.chat_list.addItem("채팅 내역이 없습니다")
@@ -285,9 +258,9 @@ class MainWindow(QMainWindow):
             return
         nick = self.nick_input.text().strip()
         if nick:
-            chats = storage.search_by_nickname(streamer_id, nick)
+            chats = main_viewmodel.search_by_nickname(streamer_id, nick)
         else:
-            chats = storage.get_all_chats(streamer_id)
+            chats = main_viewmodel.get_all_chats(streamer_id)
         self.chat_list.clear()
         for c in chats[-100:]:
             self.chat_list.addItem(
@@ -353,10 +326,3 @@ class MainWindow(QMainWindow):
                     w.setStyleSheet(
                         "background: #eeeeee; color: #1a7fe8; border: 1px solid #1a7fe8; border-radius: 12px; padding: 2px 8px;"
                     )
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
