@@ -3,7 +3,6 @@ import sys
 from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -13,6 +12,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMenu,
     QPushButton,
+    QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(700, 600)
         self.is_dark = True
         self.init_ui()
+        self.chat_list.itemClicked.connect(self.on_chat_clicked)
         self.apply_theme()
         self.load_favorites()
 
@@ -69,13 +70,14 @@ class MainWindow(QMainWindow):
         header.addWidget(self.theme_btn)
         layout.addLayout(header)
 
-        # 방송 추가 섹션
+        # 방송 추가 박스
         add_frame = QFrame()
         add_frame.setFrameShape(QFrame.Shape.StyledPanel)
         add_layout = QVBoxLayout(add_frame)
+        add_layout.setContentsMargins(8, 8, 8, 8)
 
         add_label = QLabel("방송 추가")
-        add_label.setFont(QFont("Arial", 10))
+        add_label.setFont(QFont("Arial", 15))
 
         input_row = QHBoxLayout()
         self.streamer_input = QLineEdit()
@@ -95,27 +97,35 @@ class MainWindow(QMainWindow):
         input_row.addWidget(self.remove_btn)
         input_row.addWidget(self.fav_btn)
 
-        fav_label = QLabel("즐겨찾기 (더블클릭으로 추가)")
-        fav_label.setFont(QFont("Arial", 9))
+        add_layout.addWidget(add_label)
+        add_layout.addLayout(input_row)
+
+        # 즐겨찾기 박스
+        fav_frame = QFrame()
+        fav_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        fav_layout = QVBoxLayout(fav_frame)
+        fav_layout.setContentsMargins(8, 8, 8, 8)
+
+        fav_label = QLabel("즐겨 찾기")
+        fav_label.setFont(QFont("Arial", 15))
         self.fav_list = QListWidget()
-        self.fav_list.setFixedHeight(70)
         self.fav_list.itemDoubleClicked.connect(self.add_from_favorite)
         self.fav_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.fav_list.customContextMenuRequested.connect(self.fav_context_menu)
 
-        add_layout.addWidget(add_label)
-        add_layout.addLayout(input_row)
-        add_layout.addWidget(fav_label)
-        add_layout.addWidget(self.fav_list)
-        layout.addWidget(add_frame)
+        fav_layout.addWidget(fav_label)
+        fav_layout.addWidget(self.fav_list)
 
-        # 채팅 검색 섹션
+        # 채팅 검색 박스
         search_frame = QFrame()
         search_frame.setFrameShape(QFrame.Shape.StyledPanel)
         search_layout = QVBoxLayout(search_frame)
+        search_layout.setSpacing(4)
+        search_layout.setContentsMargins(8, 8, 8, 8)
 
-        search_label = QLabel("채팅 검색")
-        search_label.setFont(QFont("Arial", 10))
+        self.tab_widget = QTabWidget()
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+        self.tab_widget.setMaximumHeight(36)
 
         search_row = QHBoxLayout()
         self.nick_input = QLineEdit()
@@ -128,17 +138,23 @@ class MainWindow(QMainWindow):
         search_row.addWidget(self.nick_input)
         search_row.addWidget(self.search_btn)
 
-        self.tab_widget = QTabWidget()
-        self.tab_widget.currentChanged.connect(self.on_tab_changed)
-
         self.chat_list = QListWidget()
         self.chat_list.setFont(QFont("Arial", 10))
 
-        search_layout.addWidget(search_label)
-        search_layout.addLayout(search_row)
         search_layout.addWidget(self.tab_widget)
+        search_layout.addLayout(search_row)
         search_layout.addWidget(self.chat_list)
-        layout.addWidget(search_frame)
+
+        # Splitter
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(add_frame)
+        splitter.addWidget(fav_frame)
+        splitter.addWidget(search_frame)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setStretchFactor(2, 3)
+        splitter.setHandleWidth(6)
+        layout.addWidget(splitter)
 
     def add_streamer(self):
         raw = self.streamer_input.text().strip()
@@ -225,7 +241,16 @@ class MainWindow(QMainWindow):
         for c in chats:
             item = QListWidgetItem(f"[{c['time']}] {c['nickname']}: {c['message']}")
             self.chat_list.addItem(item)
-        self.chat_list.scrollToBottom()
+        # self.chat_list.scrollToBottom() 스크롤 항상 아래
+
+    def on_chat_clicked(self, item):
+        text = item.text()
+        try:
+            nickname = text.split("] ")[1].split("(")[0]
+            self.nick_input.setText(nickname)
+            self.search_chat()
+        except Exception:
+            pass
 
     def auto_update_chat(self):
         idx = self.tab_widget.currentIndex()
@@ -242,7 +267,7 @@ class MainWindow(QMainWindow):
             self.chat_list.addItem(
                 f"[{c['time']}] {c['nickname']}({c['user_id']}): {c['message']}"
             )
-        self.chat_list.scrollToBottom()
+        # self.chat_list.scrollToBottom() 스크롤 항상 아래
 
     def toggle_theme(self):
         self.is_dark = not self.is_dark
@@ -257,9 +282,10 @@ class MainWindow(QMainWindow):
                 QFrame { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; }
                 QLineEdit, QComboBox { background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 6px; padding: 4px 8px; }
                 QListWidget { background: #1a1a1a; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; }
-                QTabWidget::pane { border: 1px solid #333; }
-                QTabBar::tab { background: #2a2a2a; color: #e0e0e0; padding: 6px 16px; border-radius: 4px; }
-                QTabBar::tab:selected { background: #4a9eff; color: white; }
+                QTabWidget::pane { border: none; background: transparent; }
+                QTabBar::tab { background: #2a2a2a; color: #888; padding: 6px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 2px; }
+                QTabBar::tab:selected { background: #1a1a1a; color: #e0e0e0; border-bottom: 2px solid #4a9eff; }
+                QTabBar::tab:hover { background: #333; color: #e0e0e0; }
                 QPushButton { border-radius: 6px; padding: 4px 8px; }
             """
             )
@@ -270,7 +296,6 @@ class MainWindow(QMainWindow):
             self.theme_btn.setStyleSheet(
                 "background: #ffffff; color: #1a1a1a; border: 1px solid #444; border-radius: 6px;"
             )
-
         else:
             self.setStyleSheet(
                 """
@@ -278,9 +303,10 @@ class MainWindow(QMainWindow):
                 QFrame { background: #ffffff; border: 1px solid #ddd; border-radius: 8px; }
                 QLineEdit, QComboBox { background: #eeeeee; color: #1a1a1a; border: 1px solid #ddd; border-radius: 6px; padding: 4px 8px; }
                 QListWidget { background: #ffffff; color: #1a1a1a; border: 1px solid #ddd; border-radius: 6px; }
-                QTabWidget::pane { border: 1px solid #ddd; }
-                QTabBar::tab { background: #eeeeee; color: #1a1a1a; padding: 6px 16px; border-radius: 4px; }
-                QTabBar::tab:selected { background: #1a7fe8; color: white; }
+                QTabWidget::pane { border: none; background: transparent; }
+                QTabBar::tab { background: #eeeeee; color: #888; padding: 6px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 2px; }
+                QTabBar::tab:selected { background: #ffffff; color: #1a1a1a; border-bottom: 2px solid #1a7fe8; }
+                QTabBar::tab:hover { background: #ddd; color: #1a1a1a; }
                 QPushButton { border-radius: 6px; padding: 4px 8px; }
             """
             )
