@@ -4,7 +4,6 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -14,6 +13,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMenu,
     QPushButton,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -90,7 +90,6 @@ class MainWindow(QMainWindow):
         self.streamer_list_label = QLabel("수집 중인 방송: 없음")
         self.streamer_list_label.setFont(QFont("Arial", 9))
         self.streamer_tags = QHBoxLayout()
-        add_layout.addLayout(self.streamer_tags)
 
         fav_label = QLabel("즐겨찾기 (더블클릭으로 추가)")
         fav_label.setFont(QFont("Arial", 9))
@@ -103,6 +102,7 @@ class MainWindow(QMainWindow):
         add_layout.addWidget(add_label)
         add_layout.addLayout(input_row)
         add_layout.addWidget(self.streamer_list_label)
+        add_layout.addLayout(self.streamer_tags)
         add_layout.addWidget(fav_label)
         add_layout.addWidget(self.fav_list)
         layout.addWidget(add_frame)
@@ -116,9 +116,6 @@ class MainWindow(QMainWindow):
         search_label.setFont(QFont("Arial", 10))
 
         search_row = QHBoxLayout()
-        self.streamer_combo = QComboBox()
-        self.streamer_combo.setFixedHeight(36)
-        self.streamer_combo.setMinimumWidth(160)
         self.nick_input = QLineEdit()
         self.nick_input.setPlaceholderText("닉네임 검색")
         self.nick_input.setFixedHeight(36)
@@ -126,16 +123,18 @@ class MainWindow(QMainWindow):
         self.search_btn = QPushButton("검색")
         self.search_btn.setFixedSize(60, 36)
         self.search_btn.clicked.connect(self.search_chat)
-
-        search_row.addWidget(self.streamer_combo)
         search_row.addWidget(self.nick_input)
         search_row.addWidget(self.search_btn)
+
+        self.tab_widget = QTabWidget()
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
 
         self.chat_list = QListWidget()
         self.chat_list.setFont(QFont("Arial", 10))
 
         search_layout.addWidget(search_label)
         search_layout.addLayout(search_row)
+        search_layout.addWidget(self.tab_widget)
         search_layout.addWidget(self.chat_list)
         layout.addWidget(search_frame)
 
@@ -143,7 +142,6 @@ class MainWindow(QMainWindow):
         text = text.strip()
         if "sooplive" in text or "afreecatv" in text:
             parts = text.rstrip("/").split("/")
-            # URL에서 스트리머 ID 추출 (숫자가 아닌 마지막 부분)
             for part in reversed(parts):
                 if (
                     part
@@ -198,13 +196,18 @@ class MainWindow(QMainWindow):
         else:
             self.streamer_list_label.setText("수집 중인 방송: 없음")
 
-        current = self.streamer_combo.currentText()
-        self.streamer_combo.clear()
-        self.streamer_combo.addItem("방송 선택")
+        # 탭 갱신
+        current_tab = self.tab_widget.currentIndex()
+        self.tab_widget.blockSignals(True)
+        self.tab_widget.clear()
         for s in streamers:
-            self.streamer_combo.addItem(s)
-        if current in streamers:
-            self.streamer_combo.setCurrentText(current)
+            self.tab_widget.addTab(QWidget(), s)
+        self.tab_widget.blockSignals(False)
+        if 0 <= current_tab < self.tab_widget.count():
+            self.tab_widget.setCurrentIndex(current_tab)
+
+    def on_tab_changed(self, index):
+        self.chat_list.clear()
 
     def toggle_favorite(self):
         raw = self.streamer_input.text().strip()
@@ -214,7 +217,6 @@ class MainWindow(QMainWindow):
         if streamer_id in favorites.favorites:
             favorites.remove(streamer_id)
         else:
-            # 닉네임 가져오기 시도
             import asyncio
 
             async def get_nick():
@@ -255,9 +257,10 @@ class MainWindow(QMainWindow):
         self.chat_list.addItem(message)
 
     def search_chat(self):
-        streamer_id = self.streamer_combo.currentText()
+        idx = self.tab_widget.currentIndex()
+        streamer_id = self.tab_widget.tabText(idx) if idx >= 0 else ""
         nick = self.nick_input.text().strip()
-        if streamer_id == "방송 선택" or not streamer_id:
+        if not streamer_id:
             self.chat_list.clear()
             self.chat_list.addItem("방송을 선택해주세요")
             return
@@ -276,10 +279,11 @@ class MainWindow(QMainWindow):
         self.chat_list.scrollToBottom()
 
     def auto_update_chat(self):
-        streamer_id = self.streamer_combo.currentText()
-        nick = self.nick_input.text().strip()
-        if streamer_id == "방송 선택" or not streamer_id:
+        idx = self.tab_widget.currentIndex()
+        streamer_id = self.tab_widget.tabText(idx) if idx >= 0 else ""
+        if not streamer_id:
             return
+        nick = self.nick_input.text().strip()
         if nick:
             chats = storage.search_by_nickname(streamer_id, nick)
         else:
@@ -304,6 +308,9 @@ class MainWindow(QMainWindow):
                 QFrame { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; }
                 QLineEdit, QComboBox { background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 6px; padding: 4px 8px; }
                 QListWidget { background: #1a1a1a; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; }
+                QTabWidget::pane { border: 1px solid #333; }
+                QTabBar::tab { background: #2a2a2a; color: #e0e0e0; padding: 6px 16px; border-radius: 4px; }
+                QTabBar::tab:selected { background: #4a9eff; color: white; }
                 QPushButton { border-radius: 6px; padding: 4px 8px; }
             """
             )
@@ -327,6 +334,9 @@ class MainWindow(QMainWindow):
                 QFrame { background: #ffffff; border: 1px solid #ddd; border-radius: 8px; }
                 QLineEdit, QComboBox { background: #eeeeee; color: #1a1a1a; border: 1px solid #ddd; border-radius: 6px; padding: 4px 8px; }
                 QListWidget { background: #ffffff; color: #1a1a1a; border: 1px solid #ddd; border-radius: 6px; }
+                QTabWidget::pane { border: 1px solid #ddd; }
+                QTabBar::tab { background: #eeeeee; color: #1a1a1a; padding: 6px 16px; border-radius: 4px; }
+                QTabBar::tab:selected { background: #1a7fe8; color: white; }
                 QPushButton { border-radius: 6px; padding: 4px 8px; }
             """
             )
